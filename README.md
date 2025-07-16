@@ -11,13 +11,18 @@ A modern Flask web application to upload, view, delete, and combine PDF files us
 
 ## Setup
 1. Create and activate a Python virtual environment.
+   ```bash
+   python -m venv venv
+   venv/Scripts/activate
+   ```
 2. Install dependencies:
    ```bash
-   pip install flask pypdf werkzeug
+   pip install -r requirements.txt
    ```
 3. Run the app:
    ```bash
-   python app.py
+   cd App
+   flask run
    ```
 4. Open your browser at http://127.0.0.1:5000
 
@@ -30,3 +35,14 @@ A modern Flask web application to upload, view, delete, and combine PDF files us
 ## Notes
 - Tailwind CSS is loaded via CDN for simplicity.
 - Uploaded files are stored in the `uploads` folder.
+
+
+## Future Plan
+- merge pdf
+- split pdf
+- pdf to word
+- word to pdf
+- pdf to jpg
+- jpg to pdf
+- add watermark
+- organize pdf
