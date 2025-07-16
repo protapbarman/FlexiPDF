@@ -1,0 +1,396 @@
+{% extends "layouts/base.html" %}
+
+{% block content %}
+<div class="bg-gradient-to-b from-yellow-50 to-white pt-8 px-4">
+    <div class="max-w-7xl mx-auto"> 
+        <nav class="mb-8">
+            <ol class="flex items-center space-x-2 text-gray-600">
+                <li><a href="{{ url_for('main.index') }}" class="hover:text-blue-600">Home</a></li>
+                <li><i class="fas fa-chevron-right text-sm"></i></li>
+                <li class="text-blue-600">Merge PDFs</li>
+            </ol>
+        </nav>
+    
+        <div class="bg-white rounded-2xl shadow-lg p-8">
+            <div class="text-center mb-8">
+                <div class="text-blue-600 text-5xl mb-4">
+                    <i class="fas fa-object-group"></i>
+                </div>
+                <h1 class="text-3xl font-bold text-gray-900 mb-4">Merge PDF Files</h1>
+                <p class="text-gray-600 max-w-2xl mx-auto">
+                    Combine multiple PDF files or documents into a single PDF file in the order you want
+                </p>
+            </div>
+    
+            <!-- Upload Section -->
+            <form method="POST" enctype="multipart/form-data" class="space-y-6" id="uploadForm" action="{{ url_for('pdf.merge_pdfs_route') }}">
+                <!-- Drag & Drop Zone -->
+                <div class="border-2 border-dashed border-gray-300 rounded-xl p-8" 
+                     id="dropZone">
+                    <input type="file" name="files[]" multiple accept="application/pdf,.pdf" class="hidden" id="fileInput">
+                    <div class="text-center">
+                        <div class="text-gray-400 mb-4">
+                            <i class="fas fa-cloud-upload-alt text-5xl"></i>
+                        </div>
+                        <h3 class="text-lg font-medium text-gray-900 mb-2">Drag & Drop your PDF files here</h3>
+                        <p class="text-gray-500 mb-4">or</p>
+                        <button type="button" 
+                                id="browseButton"
+                                class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                            <i class="fas fa-folder-open mr-2"></i>
+                            Browse Files
+                        </button>
+                    </div>
+                </div>
+    
+                <!-- File List -->
+                <div id="fileList" class="hidden">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">Selected Files</h3>
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <ul class="divide-y divide-gray-200" id="fileListItems"></ul>
+                    </div>
+                </div>
+    
+                <!-- Submit Button -->
+                <div class="flex justify-center">
+                    <button type="submit" 
+                            class="inline-flex items-center px-8 py-3 border border-transparent rounded-lg shadow-sm text-lg font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                            id="submitButton"
+                            disabled>
+                        <i class="fas fa-object-group mr-2"></i>
+                        Merge PDFs
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    $(document).ready(function() {
+        const $dropZone = $('#dropZone');
+        const $fileInput = $('#fileInput');
+        const $fileList = $('#fileList');
+        const $fileListItems = $('#fileListItems');
+        const $submitButton = $('#submitButton');
+        let dragSrcIndex = null;
+        let dragSrcElement = null;
+
+        // Browse button click handler
+        $('#browseButton').on('click', function() {
+            $fileInput.click();
+        });
+
+        // Drag & Drop handlers
+        $dropZone.on('dragover', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            $(this).addClass('border-blue-500 bg-blue-50');
+        });
+
+        $dropZone.on('dragleave', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            $(this).removeClass('border-blue-500 bg-blue-50');
+        });
+
+        $dropZone.on('drop', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            $(this).removeClass('border-blue-500 bg-blue-50');
+            
+            const dt = e.originalEvent.dataTransfer;
+            const droppedFiles = [...dt.files].filter(file => file.name.toLowerCase().endsWith('.pdf'));
+            
+            if (droppedFiles.length === 0) {
+                showError('Please select PDF files only');
+                return;
+            }
+
+            // Create a new FileList-like object
+            const dataTransfer = new DataTransfer();
+            droppedFiles.forEach(file => dataTransfer.items.add(file));
+            
+            // Update the file input
+            $fileInput[0].files = dataTransfer.files;
+            handleFiles($fileInput[0].files);
+        });
+
+        // File list drag and drop handlers
+        $(document).on('dragstart', '#fileListItems li', function(e) {
+            dragSrcElement = this;
+            dragSrcIndex = $(this).data('index');
+            e.originalEvent.dataTransfer.effectAllowed = 'move';
+            $(this).addClass('opacity-50');
+        });
+
+        $(document).on('dragover', '#fileListItems li', function(e) {
+            e.preventDefault();
+            e.originalEvent.dataTransfer.dropEffect = 'move';
+            
+            if (this === dragSrcElement) return;
+            
+            const $items = $fileListItems.children();
+            const srcIndex = $items.index(dragSrcElement);
+            const targetIndex = $items.index(this);
+            
+            if (srcIndex < targetIndex) {
+                $(this).after(dragSrcElement);
+            } else {
+                $(this).before(dragSrcElement);
+            }
+        });
+
+        $(document).on('drop', '#fileListItems li', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            if (!dragSrcElement) return;
+            
+            // Get the current order based on visual DOM position after drag
+            const $items = $fileListItems.children();
+            const currentFiles = [...$fileInput[0].files];
+            const reorderedFiles = [];
+            
+            // Create reordered array based on DOM order
+            $items.each(function(newIndex) {
+                const originalIndex = $(this).data('index');
+                reorderedFiles.push(currentFiles[originalIndex]);
+                // Update data-index to reflect new position
+                $(this).attr('data-index', newIndex);
+            });
+            
+            // Update the file input with the new order
+            const dt = new DataTransfer();
+            reorderedFiles.forEach(file => dt.items.add(file));
+            $fileInput[0].files = dt.files;
+            
+            updateFileList(reorderedFiles);
+        });
+
+        $(document).on('dragend', '#fileListItems li', function(e) {
+            e.preventDefault();
+            $(this).removeClass('opacity-50');
+            dragSrcElement = null;
+            dragSrcIndex = null;
+        });
+
+        // File input change handler
+        $fileInput.on('change', function(e) {
+            handleFiles(e.target.files);
+        });
+
+        function handleFiles(files) {
+            const pdfFiles = [...files].filter(file => file.name.toLowerCase().endsWith('.pdf'));
+            
+            if (pdfFiles.length > 0) {
+                $fileList.removeClass('hidden');
+                $submitButton.prop('disabled', false);
+                updateFileList(pdfFiles);
+            } else {
+                showError('Please select at least one PDF file');
+                $fileList.addClass('hidden');
+                $submitButton.prop('disabled', true);
+            }
+        }
+
+        function updateFileList(files) {
+            const items = files.map((file, index) => `
+                <li class="py-3 flex items-center justify-between cursor-move" 
+                    draggable="true" 
+                    data-index="${index}">
+                    <div class="flex items-center">
+                        <span class="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-600 mr-3">
+                            <i class="fas fa-grip-vertical text-sm"></i>
+                        </span>
+                        <div>
+                            <p class="text-sm font-medium text-gray-900">${file.name}</p>
+                            <p class="text-sm text-gray-500">${formatFileSize(file.size)}</p>
+                        </div>
+                    </div>
+                    <button type="button" 
+                            data-index="${index}"
+                            class="remove-file text-red-600 hover:text-red-800">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </li>
+            `).join('');
+            $fileListItems.html(items);
+
+            // Add click handler for remove buttons
+            $('.remove-file').on('click', function() {
+                removeFile($(this).data('index'));
+            });
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function removeFile(index) {
+            const dt = new DataTransfer();
+            const files = [...$fileInput[0].files];
+            files.splice(index, 1);
+            
+            files.forEach(file => dt.items.add(file));
+            $fileInput[0].files = dt.files;
+            
+            if (files.length === 0) {
+                $fileList.addClass('hidden');
+                $submitButton.prop('disabled', true);
+            }
+            
+            updateFileList(files);
+        }
+
+        function showError(message) {
+            notyf.error(message);
+        }
+        
+        function showSuccess(message) {
+            notyf.success(message);
+        }
+
+        // Form submission
+        $('#uploadForm').on('submit', async function(e) {
+            e.preventDefault();
+            
+            const files = $fileInput[0].files;
+            if (!files.length) {
+                showError('Please select at least one PDF file');
+                return;
+            }
+
+            // Validate file types
+            for (let file of files) {
+                if (!file.type.includes('pdf') && !file.name.toLowerCase().endsWith('.pdf')) {
+                    showError(`File "${file.name}" is not a PDF`);
+                    return;
+                }
+            }
+
+            $submitButton.prop('disabled', true)
+                .html(`
+                    <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Processing...
+                `);
+
+            try {
+                // Create a new FormData and explicitly add files in current order
+                const formData = new FormData();
+                const orderedFiles = [...files];
+                orderedFiles.forEach(file => {
+                    formData.append('files[]', file);
+                });
+                
+                const response = await fetch($(this).attr('action'), {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    
+                    const $link = $('<a>')
+                        .attr('href', url)
+                        .attr('download', 'merged.pdf')
+                        .appendTo('body');
+                    
+                    $link[0].click();
+                    window.URL.revokeObjectURL(url);
+                    $link.remove();
+                    
+                    showSuccess('PDFs merged successfully! Downloading your file...');
+                    
+                    this.reset();
+                    $fileList.addClass('hidden');
+                    $fileListItems.empty();
+                } else {
+                    const errorData = await response.json();
+                    showError(errorData.error || 'Error merging PDFs');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                showError('An error occurred while merging PDFs');
+            } finally {
+                $submitButton.prop('disabled', false)
+                    .html(`
+                        <i class="fas fa-object-group mr-2"></i>
+                        Merge PDFs
+                    `);
+            }
+        });
+
+        // Drag and drop reordering
+        window.handleDragStart = function(e) {
+            dragSrcElement = $(e.target).closest('li')[0];
+            dragSrcIndex = $(dragSrcElement).data('index');
+            e.dataTransfer.effectAllowed = 'move';
+            $(dragSrcElement).addClass('opacity-50');
+        };
+
+        window.handleItemDragOver = function(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            
+            const $item = $(e.target).closest('li');
+            if (!$item.length || $item[0] === dragSrcElement) return;
+            
+            const $items = $fileListItems.children();
+            const srcIndex = $items.index(dragSrcElement);
+            const targetIndex = $items.index($item);
+            
+            if (srcIndex < targetIndex) {
+                $item.after(dragSrcElement);
+            } else {
+                $item.before(dragSrcElement);
+            }
+        };
+
+        window.handleItemDrop = function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const $dropTarget = $(e.target).closest('li');
+            if (!$dropTarget.length || !dragSrcElement) return;
+            
+            // Get the current order based on visual DOM position after drag
+            const $items = $fileListItems.children();
+            const currentFiles = [...$fileInput[0].files];
+            const reorderedFiles = [];
+            
+            // Create reordered array based on DOM order
+            $items.each(function(newIndex) {
+                const originalIndex = $(this).data('index');
+                reorderedFiles.push(currentFiles[originalIndex]);
+                // Update data-index to reflect new position
+                $(this).attr('data-index', newIndex);
+            });
+            
+            // Update the file input with the new order
+            const dt = new DataTransfer();
+            reorderedFiles.forEach(file => dt.items.add(file));
+            $fileInput[0].files = dt.files;
+            
+            updateFileList(reorderedFiles);
+        };
+
+        window.handleDragEnd = function(e) {
+            e.preventDefault();
+            if (dragSrcElement) {
+                $(dragSrcElement).removeClass('opacity-50');
+            }
+            dragSrcElement = null;
+            dragSrcIndex = null;
+        };
+    });
+</script>
+{% endblock %}

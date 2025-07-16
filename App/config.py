@@ -1,0 +1,7 @@
+# Flask development configuration
+ENV = 'development'
+DEBUG = True
+TEMPLATES_AUTO_RELOAD = True
+EXPLAIN_TEMPLATE_LOADING = True
+SEND_FILE_MAX_AGE_DEFAULT = 0
+PRESERVE_CONTEXT_ON_EXCEPTION = True

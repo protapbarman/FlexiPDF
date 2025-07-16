@@ -38,11 +38,7 @@ A modern Flask web application to upload, view, delete, and combine PDF files us
 
 
 ## Future Plan
-- merge pdf
 - split pdf
 - pdf to word
-- word to pdf
-- pdf to jpg
-- jpg to pdf
-- add watermark
+- convert to pdf
 - organize pdf
