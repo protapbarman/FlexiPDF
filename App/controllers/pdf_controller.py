@@ -20,7 +20,20 @@ class PDFController:
         merger = PdfMerger()
 
         try:
-            return jsonify({'error': 'Feature not implemented yet'}), 501
+            for file in files:
+                if file and self.allowed_file(file.filename):
+                    merger.append(file)
+
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
+                merger.write(temp_file)
+                temp_file_path = temp_file.name
+
+            return send_file(
+                temp_file_path,
+                as_attachment=True,
+                download_name='merged.pdf',
+                mimetype='application/pdf'
+            )
         except Exception as e:
             return jsonify({'error': str(e)}), 500
         finally:
